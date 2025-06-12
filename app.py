@@ -34,7 +34,7 @@ STOCK_LIST= [
     ("INFY.NS", "Infosys Limited"),
     ("BAJFINANCE.BO", "Bajaj Finance Limited"),
     ("BAJFINANCE.NS", "Bajaj Finance Limited"),
-    ("HINDUNILVR.BO", "Hindustan Unilever Limited"),
+        ("HINDUNILVR.BO", "Hindustan Unilever Limited"),
     ("HINDUNILVR.NS", "Hindustan Unilever Limited"),
     ("ITC.NS", "ITC Limited"),
     ("ITC.BO", "ITC Limited"),
@@ -498,7 +498,27 @@ STOCK_LIST= [
     ("GUJGASLTD.NS", "Gujarat Gas Limited"),
     ("GUJGASLTD.BO", "Gujarat Gas Limited"),
     ("TATAINVEST.NS", "Tata Investment Corporation Limited"),
-  
+    ("TATAINVEST.BO", "Tata Investment Corporation Limited"),
+    ("ENDURANCE.BO", "Endurance Technologies Limited"),
+    ("ENDURANCE.NS", "Endurance Technologies Limited"),
+    ("APOLLOTYRE.NS", "Apollo Tyres Limited"),
+    ("APOLLOTYRE.BO", "Apollo Tyres Limited"),
+    ("AIAENG.BO", "AIA Engineering Limited"),
+    ("AIAENG.NS", "AIA Engineering Limited"),
+    ("POONAWALLA.NS", "Poonawalla Fincorp Limited"),
+    ("CDSL.NS", "Central Depository Services (India) Limited"),
+    ("POONAWALLA.BO", "Poonawalla Fincorp Limited"),
+    ("TATATECH.NS", "TATA TECHNOLOGIES LIMITED"),
+    ("TATATECH.BO", "Tata Technologies Limited"),
+    ("IRB.NS", "IRB Infrastructure Developers Limited"),
+    ("IRB.BO", "IRB Infrastructure Developers Limited"),
+    ("NBCC.NS", "NBCC (India) Limited"),
+    ("NBCC.BO", "NBCC (India) Limited"),
+    ("APARINDS.NS", "APAR Industries Limited"),
+    ("APARINDS.BO", "APAR Industries Limited"),
+    ("ABFRL.NS", "Aditya Birla Fashion and Retail Limited"),
+    ("ABFRL.BO", "Aditya Birla Fashion and Retail Limited"),
+
 ]
 
 def fetch_current_price(symbol):
@@ -661,25 +681,16 @@ def generate_state(df, symbol, timeframe):
 
     return last_state, last_price
 
-def invert_long_signal(state):
-    if state == "BUY":
-        return "SELL (Close Position)"
-    elif state == "SELL":
-        return "BUY"
-    else:
-        return state
-
 def color_for(state):
     if state.startswith("BUY"):
-        return "#2e7d32"
+        return "var(--green-signal)"
     elif state.startswith("SELL"):
-        return "#c62828"
+        return "var(--red-signal)"
     else:
-        return "#757575"
+        return "var(--gray-signal)"
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    # Important fix here: select symbol string only
     selected_symbol = request.form.get("symbol", STOCK_LIST[0][0])
 
     current_price = fetch_current_price(selected_symbol)
@@ -688,7 +699,7 @@ def index():
     df_1h = fetch_ohlc(selected_symbol, interval="60m", period="60d")
     if df_1h.empty or len(df_1h) < 200:
         app.logger.warning(f"1h data insufficient for {selected_symbol}, falling back to daily for swing signal")
-        df_1h = fetch_ohlc(selected_symbol, interval="1d", period="60d")
+        df_1h = fetch_ohlc(selected_symbol, interval="1d", period="1y")
         if df_1h.empty or len(df_1h) < 200:
             swing_state = "DATA UNAVAILABLE"
             swing_price = None
@@ -709,188 +720,288 @@ def index():
     if df_1d.empty or len(df_1d) < 20:
         app.logger.warning(f"1d data insufficient for {selected_symbol}, falling back to weekly for long term signal")
         df_1d = fetch_ohlc(selected_symbol, interval="1wk", period="2y")
-        if df_1d.empty or len(df_1d) < 10:
+        if df_1d.empty or len(df_1d) < 20:
             long_state = "DATA UNAVAILABLE"
             long_price = None
             long_close = "N/A"
             long_time = "N/A"
         else:
             df_1d = calculate_bollinger_bands(df_1d, 20, 3)
-            long_state_raw, long_price = generate_state(df_1d, selected_symbol, "1wk")
-            long_state = invert_long_signal(long_state_raw)
+            long_state, long_price = generate_state(df_1d, selected_symbol, "1wk_long_fallback")
             long_close = df_1d["close"].iloc[-1]
             long_time = df_1d["open_time"].iloc[-1].strftime("%Y-%m-%d")
     else:
         df_1d = calculate_bollinger_bands(df_1d, 20, 3)
-        long_state_raw, long_price = generate_state(df_1d, selected_symbol, "1d")
-        long_state = invert_long_signal(long_state_raw)
+        long_state, long_price = generate_state(df_1d, selected_symbol, "1d")
         long_close = df_1d["close"].iloc[-1]
         long_time = df_1d["open_time"].iloc[-1].strftime("%Y-%m-%d")
 
     swing_display = swing_state + (" (Close Position)" if swing_state == "SELL" else "")
-    long_display = long_state
+    long_display = long_state + (" (Close Position)" if long_state == "SELL" else "")
 
     html = f"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>{selected_symbol} Swing and Long Term Trade Signals</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>{selected_symbol} Trade Signals</title>
 
-      <!-- Select2 CSS CDN -->
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
       <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
       <style>
-        body {{
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          max-width: 900px;
-          margin: 40px auto;
-          padding: 20px;
-          background: #f7f9fc;
-          border-radius: 10px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-          color: #333;
+        :root {{
+          --primary-color: #0052cc;
+          --green-signal: #17a55a;
+          --red-signal: #e53935;
+          --gray-signal: #5f6b7a;
+          --bg-gradient-start: #f4f7fa;
+          --bg-gradient-end: #e6ebf1;
+          --card-bg: #ffffff;
+          --text-primary: #172b4d;
+          --text-secondary: #5f6b7a;
+          --shadow-color: rgba(0, 82, 204, 0.15);
         }}
+
+        * {{
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }}
+
+        body {{
+          font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+          background-image: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+          color: var(--text-primary);
+          line-height: 1.6;
+          padding: 20px;
+        }}
+        
+        .container {{
+            max-width: 960px;
+            margin: 20px auto;
+            padding: 30px 40px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 8px 24px var(--shadow-color);
+        }}
+
         h1 {{
           text-align: center;
-          margin-bottom: 1rem;
-        }}
-        form {{
-          text-align: center;
-          margin-bottom: 30px;
-        }}
-        select {{
-          width: 100%;
-          max-width: 300px;
-        }}
-        button {{
-          font-size: 16px;
-          padding: 6px 12px;
-          margin-top: 10px;
-          cursor: pointer;
-        }}
-        .signals-container {{
-          display: flex;
-          justify-content: space-around;
-          flex-wrap: wrap;
-          margin-top: 30px;
-          gap: 30px;
-        }}
-        .signal-box {{
-          background: white;
-          border-radius: 8px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-          padding: 20px;
-          width: 400px;
-        }}
-        .signal-label {{
-          font-size: 20px;
-          font-weight: 600;
-          margin-bottom: 10px;
-          text-align: center;
-        }}
-        .state-value {{
-          font-size: 48px;
+          font-size: 2.5rem;
           font-weight: 700;
-          text-align: center;
-          margin: 20px 0 10px 0;
-          user-select: none;
+          margin-bottom: 1rem;
+          background: linear-gradient(45deg, var(--primary-color), #00A3BF);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
         }}
-        .close-label, .time-label {{
-          font-size: 16px;
+        
+        .form-container {{
           text-align: center;
-          color: #555;
-          margin-bottom: 6px;
+          margin: 30px 0;
         }}
+        
+        .form-container label {{
+            display: block;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }}
+
+        button[type="submit"] {{
+          font-size: 1rem;
+          font-weight: 600;
+          padding: 12px 24px;
+          margin-top: 20px;
+          cursor: pointer;
+          border: none;
+          border-radius: 8px;
+          background-color: var(--primary-color);
+          color: white;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }}
+
+        button[type="submit"]:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 82, 204, 0.3);
+        }}
+        
+        .signals-container {{
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+          gap: 30px;
+          margin-top: 40px;
+        }}
+        
+        .signal-box {{
+          background: var(--card-bg);
+          border-radius: 12px;
+          padding: 25px 30px;
+          text-align: center;
+          border-top: 4px solid var(--primary-color);
+          box-shadow: 0 4px 16px var(--shadow-color);
+          transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }}
+        
+        .signal-box:hover {{
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0, 82, 204, 0.2);
+        }}
+
+        .signal-label {{
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: var(--text-primary);
+          margin-bottom: 15px;
+        }}
+        
+        .state-value {{
+          font-size: 3.5rem;
+          font-weight: 700;
+          margin: 10px 0;
+          letter-spacing: -1px;
+          color: {color_for(swing_state)};
+        }}
+        
+        .price-time-info {{
+            margin-top: 15px;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }}
+        .price-time-info .value {{
+            font-weight: 600;
+            color: var(--text-primary);
+        }}
+
         .current-price-container {{
           text-align: center;
-          margin-top: 30px;
+          margin-top: 40px;
+          padding: 20px;
+          background-color: #e9f2ff;
+          border-radius: 12px;
         }}
+        .current-price-container h3 {{
+            color: var(--primary-color);
+            font-weight: 600;
+        }}
+        .current-price-container p {{
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 5px;
+        }}
+
         .instructions {{
-          max-width: 700px;
-          margin: 40px auto 0 auto;
-          padding: 15px 20px;
-          background-color: #ffffff;
+          margin-top: 40px;
+          padding: 25px 30px;
+          background-color: #f7fafc;
+          border-left: 5px solid var(--primary-color);
           border-radius: 8px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-          color: #333;
-          font-size: 16px;
-          line-height: 1.5;
         }}
+        
         .instructions h2 {{
-          text-align: center;
+          font-size: 1.2rem;
+          font-weight: 600;
+          color: var(--text-primary);
           margin-bottom: 15px;
-          color: #222;
         }}
+        
         .instructions ul {{
-          list-style-type: disc;
-          padding-left: 20px;
+          list-style-position: inside;
+          padding-left: 5px;
         }}
+        .instructions li {{
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }}
+
         footer {{
           margin-top: 40px;
-          font-size: 14px;
-          color: #999;
+          font-size: 0.875rem;
+          color: var(--text-secondary);
           text-align: center;
         }}
+        
+        /* Select2 Customization */
+        .select2-container--default .select2-selection--single {{
+            height: 45px;
+            border: 1px solid #dfe1e6;
+            border-radius: 6px;
+        }}
+        .select2-container--default .select2-selection--single .select2-selection__rendered {{
+            line-height: 43px;
+            padding-left: 15px;
+            color: var(--text-primary);
+        }}
+        .select2-container--default .select2-selection--single .select2-selection__arrow {{
+            height: 43px;
+        }}
+
       </style>
     </head>
     <body>
-      <h1>{selected_symbol} Swing and Long Term Trade Signals</h1>
+      <div class="container">
+        <h1>{selected_symbol} Trade Signals</h1>
 
-      <form method="post">
-        <label for="symbol">Select Stock Symbol (Searchable Dropdown):</label><br>
-        <select name="symbol" id="symbol" class="select2" required>
-          {"".join([f'<option value="{symbol}"{" selected" if symbol == selected_symbol else ""}>{symbol} - {name}</option>' for symbol, name in STOCK_LIST])}
-        </select>
-        <br>
-        <button type="submit">Get Signals</button>
-      </form>
-
-      <div class="signals-container">
-        <div class="signal-box">
-          <div class="signal-label">Swing Trade Signal </div>
-          <div class="state-value" style="color:{color_for(swing_state)}">{swing_display}</div>
-          <div class="close-label">Latest Close: ${swing_close if isinstance(swing_close, str) else f"{swing_close:,.2f}"}</div>
-          <div class="time-label">As of: {swing_time}</div>
+        <div class="form-container">
+          <form method="post">
+            <label for="symbol">Select Stock Symbol</label>
+            <select name="symbol" id="symbol" class="select2" required>
+              {"".join([f'<option value="{symbol}"{" selected" if symbol == selected_symbol else ""}>{name} ({symbol})</option>' for symbol, name in STOCK_LIST])}
+            </select>
+            <br>
+            <button type="submit">Get Signals</button>
+          </form>
         </div>
 
-        <div class="signal-box">
-          <div class="signal-label">Long Term Signal </div>
-          <div class="state-value" style="color:{color_for(long_state)}">{long_display}</div>
-          <div class="close-label">Latest Close: ${long_close if isinstance(long_close, str) else f"{long_close:,.2f}"}</div>
-          <div class="time-label">As of: {long_time}</div>
+        <div class="signals-container">
+          <div class="signal-box">
+            <div class="signal-label">Swing Trade Signal</div>
+            <div class="state-value" style="color:{color_for(swing_state)}">{swing_display}</div>
+            <div class="price-time-info">
+                Latest Close: <span class="value">{swing_close if isinstance(swing_close, str) else f"${swing_close:,.2f}"}</span><br>
+                As of: <span class="value">{swing_time}</span>
+            </div>
+          </div>
+
+          <div class="signal-box">
+            <div class="signal-label">Long Term Signal</div>
+            <div class="state-value" style="color:{color_for(long_state)}">{long_display}</div>
+            <div class="price-time-info">
+                Latest Close: <span class="value">{long_close if isinstance(long_close, str) else f"${long_close:,.2f}"}</span><br>
+                As of: <span class="value">{long_time}</span>
+            </div>
+          </div>
         </div>
+
+        <div class="current-price-container">
+          <h3>Current Price of {selected_symbol}</h3>
+          <p>{current_price_display}</p>
+        </div>
+
+        <div class="instructions">
+          <h2>How to Use These Signals</h2>
+          <ul>
+            <li><strong>BUY:</strong> A signal to enter a long position.</li>
+            <li><strong>SELL (Close Position):</strong> A signal to exit your long position.</li>
+            <li>This strategy is designed for long-only trading. Do not initiate short sales on a "SELL" signal.</li>
+            <li>Always use your own risk management and due diligence. These signals are for informational purposes only.</li>
+          </ul>
+        </div>
+        
+        <footer>Signals are based on proprietary analysis. Always trade responsibly. © {pd.Timestamp.now().year}</footer>
       </div>
 
-      <div class="current-price-container">
-        <h3>Current Price of {selected_symbol}:</h3>
-        <p>{current_price_display}</p>
-      </div>
-
-      <div class="instructions">
-        <h2>Instructions for Traders</h2>
-        <ul>
-          <li><strong>BUY:</strong> Enter a long position when the signal switches to BUY.</li>
-          <li><strong>SELL (Close Position):</strong> Exit your long position when the signal switches to SELL.</li>
-          <li>Hold your position until the signal changes to the opposite state.</li>
-          <li>Always use proper risk management and confirm signals with your own analysis.</li>
-        </ul>
-      </div>
-
-      <p>Signals are based on proprietary analysis.<br>Always trade responsibly.</p>
-      <footer>© {pd.Timestamp.now().year} Stock Signals</footer>
-
-      <!-- JQuery -->
       <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-      <!-- Select2 JS -->
       <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
       <script>
         $(document).ready(function() {{
-            $('.select2').select2({{
+            $('#symbol').select2({{
                 placeholder: "Select or search stock symbol",
-                allowClear: true,
-                width: 'resolve'
+                width: 'resolve',
+                dropdownParent: $('#symbol').parent()
             }});
         }});
       </script>
@@ -901,3 +1012,4 @@ def index():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5009)
+    
