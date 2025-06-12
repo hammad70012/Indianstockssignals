@@ -1,3 +1,10 @@
-Flask==3.1.1
-yfinance==0.2.61
-pandas==2.2.3
+Flask==2.3.3  # Or a more recent stable version
+Werkzeug==2.3.7 # Often installed with Flask, but good to be explicit
+yfinance==0.2.61 # Or a more recent stable version
+pandas==2.2.2 # Or a more recent stable version
+SQLAlchemy==2.0.29 # Or a more recent stable version, often installed with Flask-SQLAlchemy
+Flask-SQLAlchemy==3.1.1 # Or a more recent stable version
+Flask-Admin==1.6.1 # Or a more recent stable version
+Flask-Login==0.6.3 # Or a more recent stable version
+python-dateutil==2.9.0.post0 # For dateutil.relativedelta, or a more recent stable version
+requests==2.32.3 # Or a more recent stable version, often used for web requests
